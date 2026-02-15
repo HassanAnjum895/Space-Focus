@@ -1,7 +1,17 @@
+
 import React, { useEffect, useRef } from 'react';
 
-const StarryBackground: React.FC = () => {
+interface Props {
+  isWarpSpeed?: boolean;
+}
+
+const StarryBackground: React.FC<Props> = ({ isWarpSpeed = false }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const speedRef = useRef(isWarpSpeed ? 3 : 1);
+
+  useEffect(() => {
+    speedRef.current = isWarpSpeed ? 3 : 1;
+  }, [isWarpSpeed]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -22,30 +32,23 @@ const StarryBackground: React.FC = () => {
 
     const resizeCanvas = () => {
       const dpr = window.devicePixelRatio || 1;
-      
-      // Set display size (css pixels)
       canvas.style.width = `${window.innerWidth}px`;
       canvas.style.height = `${window.innerHeight}px`;
-      
-      // Set actual size in memory (scaled to account for extra pixel density)
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
-
       initStars(canvas.width, canvas.height, dpr);
     };
 
     const initStars = (width: number, height: number, dpr: number) => {
       stars = [];
-      // Calculate density based on logical screen area to avoid excessive count on 4k
       const logicalArea = window.innerWidth * window.innerHeight;
-      const numStars = Math.floor(logicalArea / 800); // Higher density (1 star per 800px^2)
-      
+      const numStars = Math.floor(logicalArea / 800);
       for (let i = 0; i < numStars; i++) {
         stars.push({
           x: Math.random() * width,
           y: Math.random() * height,
-          radius: (Math.random() * 1.2 + 0.5) * dpr, // Scale radius by DPR
-          baseAlpha: Math.random() * 0.5 + 0.3, // Brighter: 0.3 to 0.8 opacity
+          radius: (Math.random() * 1.2 + 0.5) * dpr,
+          baseAlpha: Math.random() * 0.5 + 0.3,
           phase: Math.random() * Math.PI * 2,
           speed: Math.random() * 0.05 + 0.005,
         });
@@ -57,9 +60,7 @@ const StarryBackground: React.FC = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       stars.forEach((star) => {
-        star.phase += star.speed;
-        
-        // Twinkle effect
+        star.phase += star.speed * speedRef.current;
         const alphaChange = Math.sin(star.phase) * 0.2;
         const currentAlpha = Math.max(0.1, Math.min(1, star.baseAlpha + alphaChange));
 
@@ -67,24 +68,29 @@ const StarryBackground: React.FC = () => {
         ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(255, 255, 255, ${currentAlpha})`;
         ctx.fill();
+        
+        if (isWarpSpeed) {
+           // Subtle trail effect in warp speed
+           ctx.beginPath();
+           ctx.moveTo(star.x, star.y);
+           ctx.lineTo(star.x, star.y + (star.radius * 2));
+           ctx.strokeStyle = `rgba(255, 255, 255, ${currentAlpha * 0.3})`;
+           ctx.stroke();
+        }
       });
 
       animationFrameId = requestAnimationFrame(draw);
     };
 
-    const handleResize = () => {
-        resizeCanvas();
-    };
-
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
     draw();
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', resizeCanvas);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [isWarpSpeed]);
 
   return (
     <canvas

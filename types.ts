@@ -1,7 +1,17 @@
+
 export interface Task {
   id: string;
   text: string;
   completed: boolean;
+  completedAt?: number;
+  subtasks?: string[];
+}
+
+export interface SessionStats {
+  minutesFocused: number;
+  tasksCompleted: number;
+  streak: number;
+  lastSessionDate?: string;
 }
 
 export enum TimerMode {
