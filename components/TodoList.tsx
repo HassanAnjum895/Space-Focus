@@ -2,40 +2,106 @@
 import React, { useState, useEffect } from 'react';
 import { Task } from '../types';
 import { breakdownTask } from '../services/geminiService';
+import { supabase } from '../services/supabaseClient';
 
 interface Props {
+  userId: string;
   onTasksUpdated?: (count: number) => void;
 }
 
-const TodoList: React.FC<Props> = ({ onTasksUpdated }) => {
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const saved = localStorage.getItem('cosmos-tasks');
-    return saved ? JSON.parse(saved) : [];
-  });
+const TodoList: React.FC<Props> = ({ userId, onTasksUpdated }) => {
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [input, setInput] = useState('');
   const [breakingId, setBreakingId] = useState<string | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
 
+  // Initial Fetch from Supabase
   useEffect(() => {
-    localStorage.setItem('cosmos-tasks', JSON.stringify(tasks));
-    // Updated to count Incomplete tasks (Active Missions)
-    if (onTasksUpdated) onTasksUpdated(tasks.filter(t => !t.completed).length);
+    fetchTasks();
+  }, [userId]);
+
+  // Report active task count whenever tasks change
+  useEffect(() => {
+    if (onTasksUpdated) {
+      onTasksUpdated(tasks.filter(t => !t.completed).length);
+    }
   }, [tasks]);
 
-  const addTask = (e: React.FormEvent) => {
+  const fetchTasks = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('todos')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      if (data) {
+        // Map DB columns to our Task interface (camelCase)
+        const mappedTasks: Task[] = data.map((d: any) => ({
+          id: d.id,
+          text: d.text,
+          completed: d.completed,
+          completedAt: d.completed_at,
+          subtasks: d.subtasks || undefined
+        }));
+        setTasks(mappedTasks);
+      }
+    } catch (err) {
+      console.error('Error fetching tasks:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
-    const newTask: Task = { id: crypto.randomUUID(), text: input.trim(), completed: false };
-    setTasks([...tasks, newTask]);
-    setInput('');
+
+    try {
+      const { data, error } = await supabase
+        .from('todos')
+        .insert([{ user_id: userId, text: input.trim(), completed: false }])
+        .select();
+
+      if (error) throw error;
+
+      if (data && data[0]) {
+        const newTask: Task = {
+          id: data[0].id,
+          text: data[0].text,
+          completed: data[0].completed,
+          completedAt: data[0].completed_at
+        };
+        setTasks([...tasks, newTask]);
+        setInput('');
+      }
+    } catch (err) {
+      console.error('Error adding task:', err);
+    }
   };
 
   const handleBreakdown = async (id: string, text: string) => {
     setBreakingId(id);
+    // 1. Get breakdown from Gemini
     const subtasks = await breakdownTask(text);
+    
+    // 2. Optimistic Update (UI first)
     setTasks(tasks.map(t => t.id === id ? { ...t, subtasks } : t));
     setBreakingId(null);
     toggleExpand(id);
+
+    // 3. Save to DB
+    try {
+      await supabase
+        .from('todos')
+        .update({ subtasks })
+        .eq('id', id);
+    } catch (err) {
+      console.error('Error saving breakdown:', err);
+    }
   };
 
   const toggleExpand = (id: string) => {
@@ -48,26 +114,56 @@ const TodoList: React.FC<Props> = ({ onTasksUpdated }) => {
     setExpandedTasks(newExpanded);
   };
 
-  const toggleTask = (id: string) => {
+  const toggleTask = async (id: string) => {
+    // Find current task
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+
+    const newCompleted = !task.completed;
+    const newCompletedAt = newCompleted ? Date.now() : null; // DB expects bigint or null
+
+    // Optimistic Update
     setTasks(tasks.map(t => t.id === id ? { 
       ...t, 
-      completed: !t.completed,
-      completedAt: !t.completed ? Date.now() : undefined
+      completed: newCompleted,
+      completedAt: newCompletedAt ? newCompletedAt : undefined
     } : t));
+
+    // DB Update
+    try {
+      await supabase
+        .from('todos')
+        .update({ completed: newCompleted, completed_at: newCompletedAt })
+        .eq('id', id);
+    } catch (err) {
+      console.error('Error toggling task:', err);
+      // Revert optimistic update if needed, but simplistic approach here
+    }
   };
 
-  const deleteTask = (id: string) => {
+  const deleteTask = async (id: string) => {
+    // Optimistic Update
     setTasks(tasks.filter(t => t.id !== id));
     const newExpanded = new Set(expandedTasks);
     newExpanded.delete(id);
     setExpandedTasks(newExpanded);
+
+    // DB Update
+    try {
+      await supabase.from('todos').delete().eq('id', id);
+    } catch (err) {
+      console.error('Error deleting task:', err);
+    }
   };
 
   return (
     <div className="bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 p-6 h-full flex flex-col overflow-hidden">
-      <h2 className="text-xl font-display font-medium mb-4 text-indigo-200 flex items-center flex-shrink-0">
-        <span className="mr-2">✦</span> Mission Log
-      </h2>
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
+        <h2 className="text-xl font-display font-medium text-indigo-200 flex items-center">
+          <span className="mr-2">✦</span> Mission Log
+        </h2>
+        {loading && <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div>}
+      </div>
       
       <form onSubmit={addTask} className="relative mb-6 flex-shrink-0">
         <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Add a new task..." className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 pl-4 pr-12 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all" />
@@ -75,7 +171,7 @@ const TodoList: React.FC<Props> = ({ onTasksUpdated }) => {
       </form>
 
       <div className="flex-1 overflow-y-auto space-y-3 pr-1 pb-2 custom-scrollbar">
-        {tasks.length === 0 && <div className="text-center text-slate-500 py-8 text-sm italic">Orbit clear. No missions pending.</div>}
+        {!loading && tasks.length === 0 && <div className="text-center text-slate-500 py-8 text-sm italic">Orbit clear. No missions pending.</div>}
         {tasks.map((task) => (
           <div key={task.id} className={`group rounded-xl transition-all duration-300 border border-transparent ${task.completed ? 'bg-slate-800/20 opacity-70' : 'bg-slate-800/60 hover:border-white/10'}`}>
             <div className="p-3 flex items-center">

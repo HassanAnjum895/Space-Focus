@@ -27,23 +27,17 @@ const App: React.FC = () => {
   const [showInfo, setShowInfo] = useState(false);
 
   useEffect(() => {
-    // Check for an active session immediately upon mount
-    const initializeSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    // Single source of truth for auth state to prevent race conditions
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      // Only stop loading if we actually found a session, otherwise wait for auth state change
-      // or assume no session after a short delay/check.
-      // However, for UX responsiveness:
       setLoading(false);
-    };
+    });
 
-    initializeSession();
-
-    // Listen for changes (sign in, sign out, refresh)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    // Initial check (in case event doesn't fire immediately)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setSession(session);
+      }
       setLoading(false);
     });
 
@@ -160,7 +154,8 @@ const App: React.FC = () => {
               </div>
               <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-6">
                 <div className="h-[500px]">
-                  <TodoList onTasksUpdated={setActiveMissions} />
+                  {/* Now passing userId to enable Supabase syncing */}
+                  <TodoList userId={session.user.id} onTasksUpdated={setActiveMissions} />
                 </div>
                 <div>
                   <MissionLogs userId={session.user.id} />
