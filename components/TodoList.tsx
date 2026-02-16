@@ -15,6 +15,7 @@ const TodoList: React.FC<Props> = ({ userId, onTasksUpdated }) => {
   const [breakingId, setBreakingId] = useState<string | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Initial Fetch from Supabase
   useEffect(() => {
@@ -31,6 +32,7 @@ const TodoList: React.FC<Props> = ({ userId, onTasksUpdated }) => {
   const fetchTasks = async () => {
     try {
       setLoading(true);
+      setError(null);
       const { data, error } = await supabase
         .from('todos')
         .select('*')
@@ -49,8 +51,9 @@ const TodoList: React.FC<Props> = ({ userId, onTasksUpdated }) => {
         }));
         setTasks(mappedTasks);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching tasks:', err);
+      setError('Connection failure: "todos" table inaccessible.');
     } finally {
       setLoading(false);
     }
@@ -61,6 +64,7 @@ const TodoList: React.FC<Props> = ({ userId, onTasksUpdated }) => {
     if (!input.trim()) return;
 
     try {
+      setError(null);
       const { data, error } = await supabase
         .from('todos')
         .insert([{ user_id: userId, text: input.trim(), completed: false }])
@@ -78,8 +82,9 @@ const TodoList: React.FC<Props> = ({ userId, onTasksUpdated }) => {
         setTasks([...tasks, newTask]);
         setInput('');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error adding task:', err);
+      setError('Failed to transmit mission order.');
     }
   };
 
@@ -101,6 +106,7 @@ const TodoList: React.FC<Props> = ({ userId, onTasksUpdated }) => {
         .eq('id', id);
     } catch (err) {
       console.error('Error saving breakdown:', err);
+      // Non-critical, just log
     }
   };
 
@@ -170,8 +176,14 @@ const TodoList: React.FC<Props> = ({ userId, onTasksUpdated }) => {
         <button type="submit" disabled={!input.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 rounded-lg text-white disabled:opacity-50 hover:bg-indigo-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg></button>
       </form>
 
+      {error && (
+        <div className="mb-2 p-2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs text-center">
+            {error}
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto space-y-3 pr-1 pb-2 custom-scrollbar">
-        {!loading && tasks.length === 0 && <div className="text-center text-slate-500 py-8 text-sm italic">Orbit clear. No missions pending.</div>}
+        {!loading && tasks.length === 0 && !error && <div className="text-center text-slate-500 py-8 text-sm italic">Orbit clear. No missions pending.</div>}
         {tasks.map((task) => (
           <div key={task.id} className={`group rounded-xl transition-all duration-300 border border-transparent ${task.completed ? 'bg-slate-800/20 opacity-70' : 'bg-slate-800/60 hover:border-white/10'}`}>
             <div className="p-3 flex items-center">

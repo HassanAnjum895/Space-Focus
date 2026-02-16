@@ -17,6 +17,7 @@ const MissionLogs: React.FC<Props> = ({ userId }) => {
   const [newLog, setNewLog] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchLogs();
@@ -25,6 +26,7 @@ const MissionLogs: React.FC<Props> = ({ userId }) => {
   const fetchLogs = async () => {
     try {
       setLoading(true);
+      setError(null);
       const { data, error } = await supabase
         .from('user_data')
         .select('*')
@@ -32,8 +34,10 @@ const MissionLogs: React.FC<Props> = ({ userId }) => {
 
       if (error) throw error;
       setLogs(data || []);
-    } catch (error) {
-      console.error('Error fetching logs:', error);
+    } catch (err: any) {
+      console.error('Error fetching logs:', err);
+      // If table doesn't exist (404/PGRST204) or permission denied
+      setError('Connection failed: Ensure "user_data" table exists in database.');
     } finally {
       setLoading(false);
     }
@@ -45,6 +49,7 @@ const MissionLogs: React.FC<Props> = ({ userId }) => {
 
     try {
       setSaving(true);
+      setError(null);
       const { data, error } = await supabase
         .from('user_data')
         .insert([{ user_id: userId, content: newLog.trim() }])
@@ -56,8 +61,9 @@ const MissionLogs: React.FC<Props> = ({ userId }) => {
         setLogs([data[0], ...logs]);
         setNewLog('');
       }
-    } catch (error) {
-      console.error('Error saving log:', error);
+    } catch (err: any) {
+      console.error('Error saving log:', err);
+      setError('Failed to record log entry.');
     } finally {
       setSaving(false);
     }
@@ -72,8 +78,8 @@ const MissionLogs: React.FC<Props> = ({ userId }) => {
 
       if (error) throw error;
       setLogs(logs.filter(log => log.id !== id));
-    } catch (error) {
-      console.error('Error deleting log:', error);
+    } catch (err) {
+      console.error('Error deleting log:', err);
     }
   };
 
@@ -116,11 +122,17 @@ const MissionLogs: React.FC<Props> = ({ userId }) => {
           )}
         </button>
       </form>
+      
+      {error && (
+        <div className="mb-2 p-2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs text-center">
+            {error}
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-3">
         {loading && logs.length === 0 ? (
            <div className="text-center text-slate-500 py-8 text-xs animate-pulse">Establishing downlink...</div>
-        ) : logs.length === 0 ? (
+        ) : logs.length === 0 && !error ? (
            <div className="text-center text-slate-500 py-8 text-sm italic">Data banks empty.</div>
         ) : (
           logs.map((log) => (

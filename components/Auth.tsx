@@ -12,6 +12,8 @@ const Auth: React.FC = () => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    
     setLoading(true);
     setError(null);
     setMessage(null);
@@ -23,7 +25,7 @@ const Auth: React.FC = () => {
           password,
         });
         if (error) throw error;
-        setMessage('Check your email for the confirmation link!');
+        setMessage('Transmission successful. Check your email comms for the verification link.');
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -32,11 +34,24 @@ const Auth: React.FC = () => {
         if (error) throw error;
       }
     } catch (err: any) {
-      setError(err.message);
+      console.error(err);
+      if (err.message && (err.message.includes("rate limit") || err.message.includes("429"))) {
+        setError("Signal jammed: Too many attempts. Please hold position for 60 seconds before re-transmitting.");
+      } else if (err.message.includes("Invalid login credentials")) {
+        setError("Access denied: Invalid coordinates (email) or passkey.");
+      } else {
+        setError(`Transmission Error: ${err.message}`);
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  const toggleMode = () => {
+    setIsSignUp(!isSignUp);
+    setError(null);
+    setMessage(null);
+  }
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-4">
@@ -84,13 +99,13 @@ const Auth: React.FC = () => {
             </div>
 
             {error && (
-              <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
+              <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs animate-in slide-in-from-top-2">
                 {error}
               </div>
             )}
             
             {message && (
-              <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">
+              <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs animate-in slide-in-from-top-2">
                 {message}
               </div>
             )}
@@ -98,10 +113,10 @@ const Auth: React.FC = () => {
             <button 
               type="submit" 
               disabled={loading}
-              className="w-full py-3 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-500/25 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              className="w-full py-3 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-500/25 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed mt-2 flex items-center justify-center"
             >
               {loading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto"></div>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
                 isSignUp ? 'Initialize Sequence' : 'Authenticate'
               )}
@@ -110,7 +125,7 @@ const Auth: React.FC = () => {
 
           <div className="mt-6 text-sm">
             <button 
-              onClick={() => setIsSignUp(!isSignUp)}
+              onClick={toggleMode}
               className="text-slate-400 hover:text-white transition-colors"
             >
               {isSignUp ? 'Already have credentials? Sign In' : "No ID found? Sign Up"}
