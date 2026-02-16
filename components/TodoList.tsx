@@ -74,7 +74,7 @@ const TodoList: React.FC<Props> = ({ onTasksUpdated }) => {
         <button type="submit" disabled={!input.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 rounded-lg text-white disabled:opacity-50 hover:bg-indigo-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg></button>
       </form>
 
-      <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto space-y-3 pr-1 pb-2 custom-scrollbar">
         {tasks.length === 0 && <div className="text-center text-slate-500 py-8 text-sm italic">Orbit clear. No missions pending.</div>}
         {tasks.map((task) => (
           <div key={task.id} className={`group rounded-xl transition-all duration-300 border border-transparent ${task.completed ? 'bg-slate-800/20 opacity-70' : 'bg-slate-800/60 hover:border-white/10'}`}>
@@ -82,7 +82,12 @@ const TodoList: React.FC<Props> = ({ onTasksUpdated }) => {
               <button onClick={() => toggleTask(task.id)} className={`flex-shrink-0 h-5 w-5 rounded-full border-2 mr-3 flex items-center justify-center transition-colors ${task.completed ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500' : 'border-slate-500 text-transparent hover:border-indigo-400'}`}><svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg></button>
               
               <div className="flex-1 flex flex-col min-w-0">
-                <span className={`text-sm truncate transition-all ${task.completed ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{task.text}</span>
+                <span 
+                  className={`text-sm truncate transition-all cursor-default ${task.completed ? 'text-slate-500 line-through' : 'text-slate-200'}`}
+                  title={task.text}
+                >
+                  {task.text}
+                </span>
                 {task.subtasks && !task.completed && (
                   <button 
                     onClick={() => toggleExpand(task.id)}
